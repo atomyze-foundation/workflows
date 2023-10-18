@@ -1,0 +1,94 @@
+---
+name: go linting
+on:
+  workflow_call:
+    inputs:
+      RUNS_ON:
+        required: false
+        type: string
+      GO_VERSION:
+        required: false
+        type: string
+      HLF_VERSION:
+        required: false
+        type: string
+
+env:
+  GO_VERSION: 1.20.10
+
+jobs:
+  go-build-chaincode:
+    runs-on: ${{ inputs.RUNS_ON || 'ubuntu-20.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VER }}
+
+      - name: setup netrc
+        run: |
+          echo ${{ secrets.NETRC }} > ~/.netrc
+          chmod 600 ~/.netrc
+          go env -w GOPRIVATE="github.com/${{ github.repository_owner }}/*"
+
+      - name: clean files
+        run: |
+          find . \
+            -type d \( -name "test" -o -name "doc" -o -name "mock" \) \
+            -print0 | xargs -r -0 /bin/rm -rf
+
+          find . \
+            -type f \( -name "*.md" -o -name "*.out" \) -delete
+
+          find . \
+            -type f \( -name "*.properties" -o -name "*_test.*" \) -delete
+
+      - name: download dependencies
+        run: |
+          export GO111MODULE=on
+          go mod download -x
+          go mod vendor
+
+      - name: version
+        run: |
+          SHA="${{ github.sha }}"
+          REF="${{ github.ref }}"
+          REPOSITORY="${{ github.repository }}"
+
+          if [[ "$REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          then
+            VERSION="${{ inputs.HLF_VERSION }}-${CI_COMMIT_REF_NAME##*/}"
+          else
+            VERSION="${{ inputs.HLF_VERSION }}-${SHA:0:7}"
+          fi
+
+          PACKAGE="${REPOSITORY##*/}_${VERSION}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
+
+      - name: build chaincode
+        run: |
+          echo "#!/bin/sh
+          peer lifecycle chaincode package \
+            --path '.' \
+            --lang 'golang' \
+            --label '${PACKAGE}' \
+            '$PACKAGE.tar.gz'
+          chmod 644 '$PACKAGE.tar.gz'
+          " | tee build.sh
+          chmod 755 build.sh
+
+          docker run \
+            -v "$PWD:/src" \
+            -w "/src" \
+            -e "GOFLAGS=-buildvcs=false" \
+            --rm \
+            hyperledger/fabric-tools:${{ inputs.HLF_VERSION }} \
+            ./build.sh
+          ls -la
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.PACKAGE }}
+          path: ${{ env.PACKAGE }}.tar.gz
+          if-no-files-found: error

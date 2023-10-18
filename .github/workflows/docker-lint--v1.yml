@@ -1,0 +1,27 @@
+---
+name: docker lint
+on:
+  workflow_call:
+    inputs:
+      RUNS_ON:
+        required: false
+        type: string
+
+jobs:
+  docker-lint:
+    runs-on: ${{ inputs.RUNS_ON || 'ubuntu-20.04' }}
+    steps:
+      - name: check out code
+        uses: actions/checkout@v4
+
+      - name: "hadolint"
+        uses: ghe-actions/dockerfile-validator@v1
+        with:
+          dockerfile: 'Dockerfile'
+          lint: 'hadolint'
+
+      - name: "dockerlint"
+        uses: ghe-actions/dockerfile-validator@v1
+        with:
+          dockerfile: 'Dockerfile'
+          lint: 'dockerlint'

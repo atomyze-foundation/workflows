@@ -1,0 +1,62 @@
+---
+name: go tests
+on:
+  workflow_call:
+    inputs:
+      RUNS_ON:
+        required: false
+        type: string
+      GO_VERSION:
+        required: false
+        type: string
+      GO_TEST_ARGS:
+        required: false
+        type: string
+
+env:
+  GO_VERSION: 1.20.10
+
+jobs:
+  go-test-unit:
+    runs-on: ${{ inputs.RUNS_ON || 'ubuntu-20.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VER }}
+
+      - name: setup netrc
+        run: |
+          echo ${{ secrets.NETRC }} > ~/.netrc
+          chmod 600 ~/.netrc
+          go env -w GOPRIVATE="github.com/${{ github.repository_owner }}/*"
+
+      - name: unit test
+        run: |
+          go test -count 1 ./... ${{ inputs.GO_TEST_ARGS || '' }}
+
+  go-test-coverage:
+    runs-on: ${{ inputs.RUNS_ON || 'ubuntu-20.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.GO_VERSION || env.GO_VERSION }}
+
+      - name: setup netrc
+        run: |
+          echo ${{ secrets.NETRC }} > ~/.netrc
+          chmod 600 ~/.netrc
+          go env -w GOPRIVATE="github.com/${{ github.repository_owner }}/*"
+
+      - name: generate test coverage
+        run: |
+          go test ./... \
+            -coverprofile=./coverage.out ${{ inputs.GO_TEST_ARGS || '' }}
+
+      # https://github.com/vladopajic/go-test-coverage
+      - uses: vladopajic/go-test-coverage@v2.7.1
+        with:
+          config: ./.testcoverage.yml
+          profile: coverage.out
+          local-prefix: github.com/${{ github.repository }}

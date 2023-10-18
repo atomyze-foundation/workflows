@@ -1,0 +1,51 @@
+---
+name: go basic tests
+on:
+  workflow_call:
+    inputs:
+      RUNS_ON:
+        required: false
+        type: string
+      GO_VERSION:
+        required: false
+        type: string
+
+env:
+  GO_VERSION: 1.20.10
+
+jobs:
+  validate:
+    runs-on: ${{ inputs.RUNS_ON || 'ubuntu-20.04' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.GO_VERSION || env.GO_VERSION }}
+
+      - name: setup netrc
+        run: |
+          echo ${{ secrets.NETRC }} > ~/.netrc
+          chmod 600 ~/.netrc
+          go env -w GOPRIVATE="github.com/${{ github.repository_owner }}/*"
+
+      - name: go fmt
+        run: |
+          go fmt ./...
+          git diff --exit-code
+
+      - name: golint
+        run: |
+          go install golang.org/x/lint/golint@v0.0.0-20210508222113-6edffad5e616
+          golint -set_exit_status ./... | \
+            grep -vE " .* should be .*" | \
+            grep -vE "don't use an underscore in package name" | \
+            grep -vE "should replace .* with .*" | \
+            grep -vE "which can be annoying" | \
+            grep -E "." && exit 1 || exit 0
+
+      - name: check go.mod
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod

@@ -1,0 +1,36 @@
+---
+name: basic workflow to validate code
+on:
+  workflow_call:
+    inputs:
+      RUNS_ON:
+        required: false
+        type: string
+      GO_VERSION:
+        required: false
+        type: string
+
+jobs:
+  validate:
+    runs-on: ${{ inputs.RUNS_ON || 'ubuntu-20.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: check cyrillic comments
+        run: |
+          grep \
+            --exclude-dir=".git" \
+            -I \
+            -r \
+            --color \
+            -n \
+            -E "[А-Яа-яЁё]+" . && exit 1 || exit 0
+
+      - name: check todo comments
+        run: |
+          grep \
+            --exclude-dir=".git" \
+            -I \
+            -r \
+            --color \
+            -n \
+            -E " todo| TODO| ToDo|//TODO" . && exit 1 || exit 0

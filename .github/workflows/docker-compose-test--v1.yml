@@ -1,0 +1,31 @@
+---
+name: docker compose test
+on:
+  workflow_call:
+    inputs:
+      RUNS_ON:
+        required: false
+        type: string
+      TEST_ENTRYPOINT:
+        required: false
+        type: string
+
+jobs:
+  docker-compose-test:
+    runs-on: ${{ inputs.RUNS_ON || 'ubuntu-20.04' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: docker compose up
+        run: |
+          docker compose up -d
+
+      - name: docker compose test
+        run: |
+          ${{ inputs.TEST_ENTRYPOINT || './test.sh' }}
